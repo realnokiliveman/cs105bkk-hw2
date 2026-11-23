@@ -2,6 +2,8 @@
 Session 5 (importing your own modules and the standard library) and Session 6 (catching only
 the errors you expect)."""
 
+from collections import Counter
+
 from errors import SignupError, UnknownEventError
 from event import Event
 
@@ -16,19 +18,51 @@ class Club:
 
     def add_event(self, title: str, capacity: int) -> Event:
         """Make a new Event, store it under its title, and return it."""
-        raise NotImplementedError("core: check capacity and title, then store and return a new Event")
+        if capacity < 1:
+            raise ValueError(f"capacity must be at least 1, got {capacity}")
+        if title in self.events:
+            raise ValueError(f"there is already an event called {title!r}")
+        new_event = Event(title, capacity)
+        self.events[title] = new_event
+        return new_event
 
     def event(self, title: str) -> Event:
         """Return the event with this title, or raise UnknownEventError."""
-        raise NotImplementedError("core: look the event up, and turn a KeyError into UnknownEventError")
+        try:
+            return self.events[title]
+        except KeyError:
+            raise UnknownEventError(title) from None
 
     def handle(self, line: str) -> str:
         """Answer one chat command, such as "join, Muay Thai basics, Nino", with one sentence."""
-        raise NotImplementedError("core: answer a join or leave command, or say sorry")
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) != 3 or parts[0].lower() not in ("join", "leave"):
+            return f"Sorry, I don't understand '{line}'."
+
+        command, title, member = parts[0].lower(), parts[1], parts[2]
+
+        try:
+            target = self.event(title)
+            if command == "join":
+                result = target.sign_up(member)
+                if result == "seat":
+                    return f"{member} has a seat at {title}."
+                return f"{member} is on the waitlist for {title}."
+
+            moved_up = target.cancel(member)
+            message = f"{member} left {title}."
+            if moved_up is not None:
+                message += f" {moved_up} gets the seat."
+            return message
+        except SignupError as error:
+            return f"Sorry, {error}."
 
     def attendance(self) -> dict[str, int]:
         """How many events each member has a seat at. The waitlist does not count."""
-        raise NotImplementedError("core: count each member's seats over all the events")
+        counts: Counter[str] = Counter()
+        for event in self.events.values():
+            counts.update(event.seats)
+        return dict(counts)
 
 
 if __name__ == "__main__":
